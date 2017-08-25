@@ -1,0 +1,7 @@
+\beamer@endinputifotherversion {3.26pt}
+\beamer@sectionintoc {1}{\scshape Introduction}{1}{0}{1}
+\beamer@sectionintoc {2}{\scshape Background}{2}{0}{2}
+\beamer@subsectionintoc {2}{1}{Motivation}{2}{0}{2}
+\beamer@sectionintoc {3}{ctDNA Simulation}{5}{0}{3}
+\beamer@subsectionintoc {3}{1}{Results}{5}{0}{3}
+\beamer@sectionintoc {4}{\scshape Discussion}{8}{0}{4}

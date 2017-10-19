@@ -326,10 +326,11 @@ mu.start <- mu
 eps = 0.0001
 maxit=100
 
+expit <- function(x) exp(x)/(1 + exp(x))
 robust.dr <- function(y, R, Z, X, mu.start, beta.start, gamma.start, correct="both", maxit=50, eps=0.0001) {
     mu.update <- mu.start
     beta.update <- beta.start
-    gamma.update <- gamma.update
+    gamma.update <- gamma.start
     ps <- expit(Z %*% gamma)
 
     if(correct=="OR" | correct=="both") mu.or <- Z %*% beta
@@ -362,18 +363,31 @@ robust.dr <- function(y, R, Z, X, mu.start, beta.start, gamma.start, correct="bo
             u3 <- ee.u3(y, R, X, beta, w)
         }
 
+        ### x0 and x2 look to be redundant in u2/u3 leading to singular matrix. Why?
+        ### testing with this
+#         u2 <- u2[, -1]
+#         u3 <- u3[, -1]
+
         A.list <- lapply(1:1000, function(x) {
                              U <- c(u1[x],  u2[x,], u3[x,])
                              U %*% t(U)
-})
+        })
         A <- Reduce("+", A.list) / length(A.list)
 
+        ### A singular when OR and PS models both incorrect.
         U <- cbind(u1, u2, u3)
         findWeights <- function(U, A, a) {
-            norm <-  apply(U, 1, function(u) sqrt(t(u) %*% solve(A) %*% u))
-#             w0 <- a * sqrt(ncol(A)) / norm
-#             ifelse(w0 > 1, 1, w0)
-            psi.hampel(norm/(a*median(norm)))
+#             norm <-  apply(U, 1, function(u) sqrt(t(u) %*% solve(A) %*% u))
+            norm <-  apply(U, 1, function(u) sqrt(t(u) %*% chol2inv(chol(A)) %*% u))
+            w0 <- a * sqrt(ncol(A)) / norm
+            ifelse(w0 > 1, 1, w0)
+            w <- psi.hampel(norm/(a*median(norm)))
+
+            ### there needs to be some sort of quality assurance check here
+            ### because the norm behaves funny for very extreme values.
+            ### I just give these values weight 0 for now.
+            w[which(norm == 0)] <- 0
+            w
         }
         w <- findWeights(U, A, a)
 
@@ -389,6 +403,7 @@ robust.dr <- function(y, R, Z, X, mu.start, beta.start, gamma.start, correct="bo
             mu.or <- X %*% beta.update
         }
 
+        ### Gamma update incorrect -- singular matrix when both incorrect
         if(correct=="PS"|correct=="both") {
             gamma.update <- coef(glm(R ~ Z[,-1], family="binomial", weights=w))
             ps <- expit(Z %*% gamma.update)
@@ -410,6 +425,7 @@ robust.dr <- function(y, R, Z, X, mu.start, beta.start, gamma.start, correct="bo
 mu.both.correct  <- rep(NA, 500)
 mu.ps.correct <- rep(NA, 500)
 mu.or.correct <-  rep(NA, 500)
+mu.both.incorrect <-  rep(NA, 500)
 mu <- rep(NA, 500)
 
 for(i in 1:500) {
@@ -433,14 +449,55 @@ for(i in 1:500) {
     pi0 <- expit(-Z[,2] + 0.5*Z[,3] - 0.25*Z[,4] - 0.1*Z[,5])
 
     R <- rbinom(1000, 1, pi0)
-    mu.both.correct[i] <- robust.dr(y, R, Z, X, mu.start, beta.start, gamma.start, correct="both", maxit=10, eps=0.001)
-    mu.ps.correct[i] <- robust.dr(y, R, Z, X, mu.start, beta.start, gamma.start, correct="PS", maxit=10, eps=0.001)
-    mu.or.correct[i] <- robust.dr(y, R, Z, X, mu.start, beta.start, gamma.start, correct="OR", maxit=10, eps=0.001)
+    ##### Startings values
+    w <- rep(1, length(y))
+    beta <- lm(y[R==1] ~ Z[R==1,-1], weights=w[R==1])$coeff
+    gamma <- coef(glm(R ~ Z[,-1], family="binomial"), weights=w)
+    ps <- expit(Z %*% gamma)
+    mu <- weighted.mean(R*y/ps - (R - ps)/ps * Z %*% beta, w)
+    a <- 1.48
+
+    beta.start <- beta
+    gamma.start <- gamma
+    ps.start <- ps
+    mu.start <- mu
+
+    eps = 0.0001
+    maxit=10
+    ###################
+
+    mu.both.correct[i] <- robust.dr(y, R, Z, X, mu.start, beta.start, gamma.start, correct="both", maxit=maxit, eps=0.001)
+    mu.ps.correct[i] <- robust.dr(y, R, Z, X, mu.start, beta.start, gamma.start, correct="PS", maxit=maxit, eps=0.001)
+    mu.or.correct[i] <- robust.dr(y, R, Z, X, mu.start, beta.start, gamma.start, correct="OR", maxit=maxit, eps=0.001)
+    mu.both.incorrect[i] <- robust.dr(y, R, Z, X, mu.start, beta.start, gamma.start, correct="none", maxit=maxit, eps=0.001)
 }
 
 # bias <- 210 - mean(mu.or.correct[-484])
 # mse <- bias^2 + var(mu.or.correct[-484])
 bias <- 210 - mean(mu.both.correct)
+mse <- bias^2 + var(mu.both.correct)
+bias
+sqrt(mse)
+
+bias <- 210 - mean(mu.ps.correct)
+mse <- bias^2 + var(mu.ps.correct)
+bias
+sqrt(mse)
+
+bias <- 210 - mean(mu.or.correct)
 mse <- bias^2 + var(mu.or.correct)
 bias
 sqrt(mse)
+
+bias <- 210 - mean(mu.both.incorrect)
+mse <- bias^2 + var(mu.both.incorrect)
+bias
+sqrt(mse)
+
+#### This doesn't work. Debug.
+#### A singular. Happens on first iteration when all weights are 1. Must be a bug,
+#### since this is computationally equivalent to the standard (nonrobust) DR estimator.
+mu.both.incorrect <- robust.dr(y, R, Z, X, mu.start, beta.start, gamma.start, correct="none", maxit=1, eps=0.001)
+
+debug(robust.dr)
+robust.dr(y, R, Z, X, mu.start, beta.start, gamma.start, correct="none", maxit=1, eps=0.001)

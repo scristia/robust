@@ -386,6 +386,9 @@ robust.dr <- function(y, R, Z, X, mu.start, beta.start, gamma.start, correct="bo
             ### there needs to be some sort of quality assurance check here
             ### because the norm behaves funny for very extreme values.
             ### I just give these values weight 0 for now.
+
+            ## extreme outliers get weight 0 on odd iterations and weight 1 on even.
+            ## fix so if an observation gets 0 weight, it always keeps that weight.
             w[which(norm == 0)] <- 0
             w
         }
@@ -403,7 +406,6 @@ robust.dr <- function(y, R, Z, X, mu.start, beta.start, gamma.start, correct="bo
             mu.or <- X %*% beta.update
         }
 
-        ### Gamma update incorrect -- singular matrix when both incorrect
         if(correct=="PS"|correct=="both") {
             gamma.update <- coef(glm(R ~ Z[,-1], family="binomial", weights=w))
             ps <- expit(Z %*% gamma.update)
@@ -440,10 +442,11 @@ for(i in 1:500) {
     X <- cbind(1, x1, x2, x3, x4)
 
     ### True outcome
-    #     y <- Z %*% c(210, 27.4, 13.7, 13.7, 13.7) + rnorm(1000, 0, 1)
-    y <- Z %*% c(210, 27.4, 13.7, 13.7, 13.7)
-    y[1:100] <- y[1:100] + rnorm(100, 0, 7^2)
-    y[101:1000] <- y[101:1000] + rnorm(900, 0, 1)
+    y <- Z %*% c(210, 27.4, 13.7, 13.7, 13.7) + rnorm(1000, 0, 1)
+    ###   ^^ no outliers ^^ -- vv outliers vv
+#     y <- Z %*% c(210, 27.4, 13.7, 13.7, 13.7)
+#     y[1:100] <- y[1:100] + rnorm(100, 0, 7^2)
+#     y[101:1000] <- y[101:1000] + rnorm(900, 0, 1)
 
     expit <- function(x) exp(x)/(1 + exp(x))
     pi0 <- expit(-Z[,2] + 0.5*Z[,3] - 0.25*Z[,4] - 0.1*Z[,5])
@@ -463,7 +466,7 @@ for(i in 1:500) {
     mu.start <- mu
 
     eps = 0.0001
-    maxit=10
+    maxit=16
     ###################
 
     mu.both.correct[i] <- robust.dr(y, R, Z, X, mu.start, beta.start, gamma.start, correct="both", maxit=maxit, eps=0.001)
@@ -474,25 +477,33 @@ for(i in 1:500) {
 
 # bias <- 210 - mean(mu.or.correct[-484])
 # mse <- bias^2 + var(mu.or.correct[-484])
-bias <- 210 - mean(mu.both.correct)
-mse <- bias^2 + var(mu.both.correct)
-bias
-sqrt(mse)
+bias.both.correct <- 210 - mean(mu.both.correct)
+mse.both.correct <- bias.both.correct^2 + var(mu.both.correct)
+bias.both.correct
+sqrt(mse.both.correct)
 
-bias <- 210 - mean(mu.ps.correct)
-mse <- bias^2 + var(mu.ps.correct)
-bias
-sqrt(mse)
+bias.ps.correct <- 210 - mean(mu.ps.correct)
+mse.ps.correct <- bias.ps.correct^2 + var(mu.ps.correct)
+bias.ps.correct
+sqrt(mse.ps.correct)
 
-bias <- 210 - mean(mu.or.correct)
-mse <- bias^2 + var(mu.or.correct)
-bias
-sqrt(mse)
+bias.or.correct <- 210 - mean(mu.or.correct)
+mse.or.correct <- bias.or.correct^2 + var(mu.or.correct)
+bias.or.correct
+sqrt(mse.or.correct)
 
-bias <- 210 - mean(mu.both.incorrect)
-mse <- bias^2 + var(mu.both.incorrect)
-bias
-sqrt(mse)
+bias.both.incorrect <- 210 - mean(mu.both.incorrect)
+mse.both.incorrect <- bias.both.incorrect^2 + var(mu.both.incorrect)
+bias.both.incorrect
+sqrt(mse.both.incorrect)
+
+bias <- c(bias.both.correct, bias.ps.correct, bias.or.correct, bias.both.incorrect)
+rmse <- sqrt(c(mse.both.correct, mse.ps.correct, mse.or.correct, mse.both.incorrect))
+
+tab <- cbind(bias, rmse)
+rownames(tab) <- c("Both Correct", "OR Wrong", "PS Wrong", "Both Wrong")
+
+tab
 
 #### This doesn't work. Debug.
 #### A singular. Happens on first iteration when all weights are 1. Must be a bug,

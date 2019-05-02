@@ -1,7 +1,7 @@
 ---
 title: "Robustifying doubly-robust estimators"
 author: "Stephen Cristiano"
-date: "12/7/2017"
+date:  "`r format(Sys.time(), '%d %B, %Y')`"
 output:
   pdf_document:
     latex_engine: xelatex
@@ -134,8 +134,8 @@ the weight option set to $W$.
 
 ## Simulation
 
-Closely follows the scenario proposed by Tsiatsis and Davidian 'More Robust Doubly Robust Estimators", but
-with an additional step to randomly "corrupt" outcomes, creating outliers.
+Closely follows the scenario proposed by Tsiatsis and Davidian `More Robust Doubly Robust Estimators', but
+with an additional step to randomly ``corrupt'' outcomes, creating outliers.
 
 * $Z_i = (Z_{i1}, \ldots, Z_{i4})^t \sim N(0, 1)$ with $n=500$.
 * $X_i = (X_{i1}, \ldots, X_{i4})^t$ where 

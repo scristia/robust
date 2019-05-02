@@ -1,4 +1,7 @@
 .Rprofile
 .Rhistory
 *.sw?
+*.zip
+report/cache/
+report/robustreport_cache/
 
